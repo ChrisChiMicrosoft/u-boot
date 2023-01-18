@@ -4,6 +4,7 @@
  * Copyright (c) 2014, NVIDIA CORPORATION.  All rights reserved.
  */
 
+#include <stdlib.h>
 #include <common.h>
 #include <command.h>
 #include <fs.h>
@@ -41,6 +42,21 @@ static int do_get_tftp(struct pxe_context *ctx, const char *file_path,
 	ctx->pxe_file_size = *sizep;
 
 	return 1;
+}
+
+/*
+ * Looks for a pxe file with specified config file name,
+ * which is received from DHCP option 209.
+ *
+ * Returns 1 on success or < 0 on error.
+ */
+static inline int pxe_dhcp_option_path(struct pxe_context *ctx, unsigned long pxefile_addr_r)
+{
+	int ret = get_pxe_file(ctx, pxelinux_configfile, pxefile_addr_r);
+
+	free(pxelinux_configfile);
+
+	return ret;
 }
 
 /*
@@ -114,6 +130,20 @@ int pxe_get(ulong pxefile_addr_r, char **bootdirp, ulong *sizep)
 	if (pxe_setup_ctx(&ctx, cmdtp, do_get_tftp, NULL, false,
 			  env_get("bootfile")))
 		return -ENOMEM;
+
+	if (IS_ENABLED(CONFIG_BOOTP_PXE_DHCP_OPTION)) {
+		/*
+		 * Do not try other paths if config file has been specified in DHCP option.
+		 * PXE boot will fail if that config file can't be found.
+		 */
+		if (pxelinux_configfile) {
+			if (pxe_dhcp_option_path(&ctx, pxefile_addr_r) > 0)
+				goto done;
+
+			goto error_exit;
+		}
+	}
+
 	/*
 	 * Keep trying paths until we successfully get a file we're looking
 	 * for.
@@ -131,6 +161,7 @@ int pxe_get(ulong pxefile_addr_r, char **bootdirp, ulong *sizep)
 		i++;
 	}
 
+error_exit:
 	pxe_destroy_ctx(&ctx);
 
 	return -ENOENT;
