@@ -134,6 +134,8 @@ struct in_addr net_dns_server;
 /* Our 2nd DNS IP address */
 struct in_addr net_dns_server2;
 #endif
+/* Indicates whether the pxe path prefix / config file was specified in dhcp option */
+char *pxelinux_configfile;
 
 /** END OF BOOTP EXTENTIONS **/
 
